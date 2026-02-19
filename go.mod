@@ -1,4 +1,4 @@
-module pipeline
+module gh-util
 
 go 1.26
 

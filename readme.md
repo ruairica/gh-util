@@ -1,7 +1,7 @@
-https://docs.github.com/en/rest/checks/runs?apiVersion=2022-11-28
-https://docs.github.com/en/rest/checks/runs?apiVersion=2022-11-28#get-a-check-run
-look at full response... maybe get pull requests... for branch? maybe separate project...?
+Usage: gh-util [flags]
 
-https://simonwillison.net/2026/Feb/4/distributing-go-binaries/
+Flags:
+  -p, --pipeline   Open Azure DevOps pipeline runs for the current branch
+  -pr              Open pull requests for the current branch
 
-go install -ldflags="-s -w" .
+TODO https://simonwillison.net/2026/Feb/4/distributing-go-binaries/

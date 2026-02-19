@@ -14,6 +14,14 @@ type Pipeline struct {
 	Status string
 }
 
+type PR struct {
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
+	State  string `json:"state"`
+	Draft  bool   `json:"isDraft"`
+}
+
 type checkRunsResponse struct {
 	CheckRuns []checkRun `json:"check_runs"`
 }
@@ -82,4 +90,22 @@ func fetchPipelines(owner, repo, branch string) ([]Pipeline, error) {
 	})
 
 	return pipelines, nil
+}
+
+func fetchPRs(branch string) ([]PR, error) {
+	out, err := exec.Command("gh", "pr", "list",
+		"--head", branch,
+		"--state", "open",
+		"--json", "number,title,url,state,isDraft",
+	).Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list PRs — is 'gh' installed and authenticated?\nRun: gh auth login")
+	}
+
+	var prs []PR
+	if err := json.Unmarshal(out, &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse PR list: %w", err)
+	}
+
+	return prs, nil
 }

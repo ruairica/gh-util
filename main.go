@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -21,12 +22,11 @@ func statusBadge(status string) string {
 	}
 }
 
-func run() error {
-	info, err := getRepoInfo()
-	if err != nil {
-		return err
-	}
+func usage() {
+	fmt.Fprintf(os.Stderr, "Usage: gh-util [flags]\n\nFlags:\n  -p, --pipeline   Open Azure DevOps pipeline runs for the current branch\n  -pr              Open pull requests for the current branch\n")
+}
 
+func runPipeline(info RepoInfo) error {
 	pipelines, err := fetchPipelines(info.Owner, info.Repo, info.Branch)
 	if err != nil {
 		return err
@@ -38,13 +38,11 @@ func run() error {
 		return nil
 	}
 
-	// Single pipeline — open directly
 	if len(pipelines) == 1 {
 		fmt.Printf("Opening: %s [%s]\n", pipelines[0].Name, pipelines[0].Status)
 		return openURL(pipelines[0].URL)
 	}
 
-	// Multiple pipelines — interactive select
 	options := make([]huh.Option[int], len(pipelines))
 	for i, p := range pipelines {
 		label := fmt.Sprintf("%-55s %s", p.Name, statusBadge(p.Status))
@@ -64,8 +62,78 @@ func run() error {
 	return openURL(pipelines[selected].URL)
 }
 
+func runPR(info RepoInfo) error {
+	prs, err := fetchPRs(info.Branch)
+	if err != nil {
+		return err
+	}
+
+	if len(prs) == 0 {
+		fmt.Printf("No open pull requests found for branch '%s'.\n", info.Branch)
+		return nil
+	}
+
+	if len(prs) == 1 {
+		pr := prs[0]
+		draft := ""
+		if pr.Draft {
+			draft = " (draft)"
+		}
+		fmt.Printf("Opening: #%d %s%s\n", pr.Number, pr.Title, draft)
+		return openURL(pr.URL)
+	}
+
+	options := make([]huh.Option[int], len(prs))
+	for i, pr := range prs {
+		draft := ""
+		if pr.Draft {
+			draft = " [draft]"
+		}
+		label := fmt.Sprintf("#%-6d %s%s", pr.Number, pr.Title, draft)
+		options[i] = huh.NewOption(label, i)
+	}
+
+	var selected int
+	err = huh.NewSelect[int]().
+		Title(fmt.Sprintf("Pull Requests — %s", info.Branch)).
+		Options(options...).
+		Value(&selected).
+		Run()
+	if err != nil {
+		return err
+	}
+
+	return openURL(prs[selected].URL)
+}
+
 func main() {
-	if err := run(); err != nil {
+	pipelineFlag := flag.Bool("p", false, "Open Azure DevOps pipeline runs")
+	prFlag := flag.Bool("pr", false, "Open pull requests for the current branch")
+
+	// Support --pipeline as alias for -p
+	flag.BoolVar(pipelineFlag, "pipeline", false, "Open Azure DevOps pipeline runs")
+
+	flag.Usage = usage
+	flag.Parse()
+
+	if !*pipelineFlag && !*prFlag {
+		usage()
+		os.Exit(1)
+	}
+
+	info, err := getRepoInfo()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *pipelineFlag {
+		err = runPipeline(info)
+	} else {
+		err = runPR(info)
+	}
+
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
