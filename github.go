@@ -1,0 +1,85 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os/exec"
+	"sort"
+	"strings"
+)
+
+type Pipeline struct {
+	Name   string
+	URL    string
+	Status string
+}
+
+type checkRunsResponse struct {
+	CheckRuns []checkRun `json:"check_runs"`
+}
+
+type checkRun struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	StartedAt  string `json:"started_at"`
+	DetailsURL string `json:"details_url"`
+	App        struct {
+		Slug string `json:"slug"`
+	} `json:"app"`
+}
+
+func fetchPipelines(owner, repo, branch string) ([]Pipeline, error) {
+	endpoint := fmt.Sprintf("/repos/%s/%s/commits/%s/check-runs?per_page=100", owner, repo, branch)
+	out, err := exec.Command("gh", "api", endpoint).Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to call GitHub API — is 'gh' installed and authenticated?\nRun: gh auth login")
+	}
+
+	var resp checkRunsResponse
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse GitHub API response: %w", err)
+	}
+
+	// Filter to Azure Pipelines check runs
+	adoRuns := make([]checkRun, 0)
+	for _, cr := range resp.CheckRuns {
+		if cr.App.Slug == "azure-pipelines" {
+			adoRuns = append(adoRuns, cr)
+		}
+	}
+
+	if len(adoRuns) == 0 {
+		return nil, nil
+	}
+
+	// Deduplicate by name — keep the most recent run per pipeline
+	grouped := make(map[string][]checkRun)
+	for _, cr := range adoRuns {
+		grouped[cr.Name] = append(grouped[cr.Name], cr)
+	}
+
+	pipelines := make([]Pipeline, 0, len(grouped))
+	for name, runs := range grouped {
+		// Sort by started_at descending, pick latest
+		sort.Slice(runs, func(i, j int) bool {
+			return runs[i].StartedAt > runs[j].StartedAt
+		})
+		latest := runs[0]
+		status := latest.Status
+		if latest.Conclusion != "" {
+			status = latest.Conclusion
+		}
+		pipelines = append(pipelines, Pipeline{
+			Name:   name,
+			URL:    latest.DetailsURL,
+			Status: status,
+		})
+	}
+
+	sort.Slice(pipelines, func(i, j int) bool {
+		return strings.ToLower(pipelines[i].Name) < strings.ToLower(pipelines[j].Name)
+	})
+
+	return pipelines, nil
+}
