@@ -49,21 +49,13 @@ func fetchPipelines(owner, repo, branch string) ([]Pipeline, error) {
 		return nil, fmt.Errorf("failed to parse GitHub API response: %w", err)
 	}
 
-	// Filter to Azure Pipelines check runs
-	adoRuns := make([]checkRun, 0)
-	for _, cr := range resp.CheckRuns {
-		if cr.App.Slug == "azure-pipelines" {
-			adoRuns = append(adoRuns, cr)
-		}
-	}
-
-	if len(adoRuns) == 0 {
+	if len(resp.CheckRuns) == 0 {
 		return nil, nil
 	}
 
-	// Deduplicate by name — keep the most recent run per pipeline
+	// Deduplicate by name — keep the most recent run per check
 	grouped := make(map[string][]checkRun)
-	for _, cr := range adoRuns {
+	for _, cr := range resp.CheckRuns {
 		grouped[cr.Name] = append(grouped[cr.Name], cr)
 	}
 

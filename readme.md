@@ -1,10 +1,11 @@
+A small Go CLI that quickly opens CI pipeline runs or pull requests for your current Git branch.
+
+Clone and run `go install -ldflags="-s -w" .` to add it to GOPATH. (requires gh cli)
+
 Usage: gh-util [flags]
 
 Flags:
-  -p, --pipeline   Open Azure DevOps pipeline runs for the current branch
-  -pr              Open pull requests for the current branch
 
-installation:
-go install github.com/your-username/gh-util@latest
-TODO https://simonwillison.net/2026/Feb/4/distributing-go-binaries/
-remove azure-pipelines filter (maybe sort in some other way)?
+  -p, --pipeline   Open pipeline runs for the current branch
+
+  -pr              Open pull requests for the current branch
