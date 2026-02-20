@@ -7,3 +7,4 @@ Flags:
 installation:
 go install github.com/your-username/gh-util@latest
 TODO https://simonwillison.net/2026/Feb/4/distributing-go-binaries/
+remove azure-pipelines filter (maybe sort in some other way)?
