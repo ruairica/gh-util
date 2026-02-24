@@ -15,11 +15,13 @@ type Pipeline struct {
 }
 
 type PR struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	URL    string `json:"url"`
-	State  string `json:"state"`
-	Draft  bool   `json:"isDraft"`
+	Number  int    `json:"number"`
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	State   string `json:"state"`
+	Draft   bool   `json:"isDraft"`
+	HeadRef string `json:"headRefName"`
+	BaseRef string `json:"baseRefName"`
 }
 
 type checkRunsResponse struct {
@@ -93,7 +95,25 @@ func fetchPRs(branch string) ([]PR, error) {
 	out, err := exec.Command("gh", "pr", "list",
 		"--head", branch,
 		"--state", "open",
-		"--json", "number,title,url,state,isDraft",
+		"--json", "number,title,url,state,isDraft,headRefName,baseRefName",
+	).Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list PRs — is 'gh' installed and authenticated?\nRun: gh auth login")
+	}
+
+	var prs []PR
+	if err := json.Unmarshal(out, &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse PR list: %w", err)
+	}
+
+	return prs, nil
+}
+
+func fetchPRsInto(branch string) ([]PR, error) {
+	out, err := exec.Command("gh", "pr", "list",
+		"--base", branch,
+		"--state", "open",
+		"--json", "number,title,url,state,isDraft,headRefName,baseRefName",
 	).Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list PRs — is 'gh' installed and authenticated?\nRun: gh auth login")

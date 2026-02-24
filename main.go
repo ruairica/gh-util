@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/sync/errgroup"
 )
 
 func statusBadge(status string) string {
@@ -62,10 +63,42 @@ func runPipeline(info RepoInfo) error {
 	return openURL(pipelines[selected].URL)
 }
 
+func prDirection(pr PR, branch string) string {
+	if pr.HeadRef == branch {
+		return fmt.Sprintf("%s → %s", pr.HeadRef, pr.BaseRef)
+	}
+	return fmt.Sprintf("%s → %s", pr.HeadRef, pr.BaseRef)
+}
+
 func runPR(info RepoInfo) error {
-	prs, err := fetchPRs(info.Branch)
-	if err != nil {
+	var prsFrom, prsInto []PR
+
+	g := new(errgroup.Group)
+	g.Go(func() error {
+		var err error
+		prsFrom, err = fetchPRs(info.Branch)
 		return err
+	})
+	g.Go(func() error {
+		var err error
+		prsInto, err = fetchPRsInto(info.Branch)
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	// Deduplicate: a PR from this branch could also target this branch (unlikely but possible)
+	seen := make(map[int]bool)
+	var prs []PR
+	for _, pr := range prsFrom {
+		seen[pr.Number] = true
+		prs = append(prs, pr)
+	}
+	for _, pr := range prsInto {
+		if !seen[pr.Number] {
+			prs = append(prs, pr)
+		}
 	}
 
 	if len(prs) == 0 {
@@ -79,7 +112,7 @@ func runPR(info RepoInfo) error {
 		if pr.Draft {
 			draft = " (draft)"
 		}
-		fmt.Printf("Opening: #%d %s%s\n", pr.Number, pr.Title, draft)
+		fmt.Printf("Opening: #%d %s [%s]%s\n", pr.Number, pr.Title, prDirection(pr, info.Branch), draft)
 		return openURL(pr.URL)
 	}
 
@@ -89,17 +122,17 @@ func runPR(info RepoInfo) error {
 		if pr.Draft {
 			draft = " [draft]"
 		}
-		label := fmt.Sprintf("#%-6d %s%s", pr.Number, pr.Title, draft)
+		dir := prDirection(pr, info.Branch)
+		label := fmt.Sprintf("#%-6d %s (%s)%s", pr.Number, pr.Title, dir, draft)
 		options[i] = huh.NewOption(label, i)
 	}
 
 	var selected int
-	err = huh.NewSelect[int]().
+	if err := huh.NewSelect[int]().
 		Title(fmt.Sprintf("Pull Requests — %s", info.Branch)).
 		Options(options...).
 		Value(&selected).
-		Run()
-	if err != nil {
+		Run(); err != nil {
 		return err
 	}
 
