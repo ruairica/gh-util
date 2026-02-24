@@ -39,9 +39,14 @@ type checkRun struct {
 
 func fetchPipelines(owner, repo, branch string) ([]Pipeline, error) {
 	endpoint := fmt.Sprintf("/repos/%s/%s/commits/%s/check-runs?per_page=100", owner, repo, branch)
-	out, err := exec.Command("gh", "api", endpoint).Output()
+	cmd := exec.Command("gh", "api", endpoint)
+	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to call GitHub API — is 'gh' installed and authenticated?\nRun: gh auth login")
+		stderr := ""
+		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+			stderr = "\n" + strings.TrimSpace(string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("failed to call GitHub API%s\nEndpoint: %s\nIs 'gh' installed and authenticated? Run: gh auth login", stderr, endpoint)
 	}
 
 	var resp checkRunsResponse
