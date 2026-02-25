@@ -24,35 +24,35 @@ func statusBadge(status string) string {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: gh-util [flags]\n\nFlags:\n  -p, --pipeline   Open Azure DevOps pipeline runs for the current branch\n  -pr              Open pull requests for the current branch\n")
+	fmt.Fprintf(os.Stderr, "Usage: gh-util [flags]\n\nFlags:\n  -ci   Open CI check runs for the current branch\n  -pr   Open pull requests for the current branch\n")
 }
 
-func runPipeline(info RepoInfo) error {
-	pipelines, err := fetchPipelines(info.Owner, info.Repo, info.Branch)
+func runChecks(info RepoInfo) error {
+	checks, err := fetchChecks(info.Owner, info.Repo, info.Branch)
 	if err != nil {
 		return err
 	}
 
-	if len(pipelines) == 0 {
-		fmt.Printf("No Azure Pipelines check runs found on branch '%s'.\n", info.Branch)
-		fmt.Println("This branch may not have triggered a pipeline yet. Try pushing first.")
+	if len(checks) == 0 {
+		fmt.Printf("No check runs found on branch '%s'.\n", info.Branch)
+		fmt.Println("This branch may not have triggered any checks yet. Try pushing first.")
 		return nil
 	}
 
-	if len(pipelines) == 1 {
-		fmt.Printf("Opening: %s [%s]\n", pipelines[0].Name, pipelines[0].Status)
-		return openURL(pipelines[0].URL)
+	if len(checks) == 1 {
+		fmt.Printf("Opening: %s [%s]\n", checks[0].Name, checks[0].Status)
+		return openURL(checks[0].URL)
 	}
 
-	options := make([]huh.Option[int], len(pipelines))
-	for i, p := range pipelines {
-		label := fmt.Sprintf("%-55s %s", p.Name, statusBadge(p.Status))
+	options := make([]huh.Option[int], len(checks))
+	for i, c := range checks {
+		label := fmt.Sprintf("%-55s %s", c.Name, statusBadge(c.Status))
 		options[i] = huh.NewOption(label, i)
 	}
 
 	var selected int
 	err = huh.NewSelect[int]().
-		Title(fmt.Sprintf("Pipelines — %s/%s (%s)", info.Owner, info.Repo, info.Branch)).
+		Title(fmt.Sprintf("Checks — %s/%s (%s)", info.Owner, info.Repo, info.Branch)).
 		Options(options...).
 		Value(&selected).
 		Run()
@@ -60,7 +60,7 @@ func runPipeline(info RepoInfo) error {
 		return err
 	}
 
-	return openURL(pipelines[selected].URL)
+	return openURL(checks[selected].URL)
 }
 
 func prDirection(pr PR, branch string) string {
@@ -140,16 +140,13 @@ func runPR(info RepoInfo) error {
 }
 
 func main() {
-	pipelineFlag := flag.Bool("p", false, "Open Azure DevOps pipeline runs")
+	ciFlag := flag.Bool("ci", false, "Open CI check runs for the current branch")
 	prFlag := flag.Bool("pr", false, "Open pull requests for the current branch")
-
-	// Support --pipeline as alias for -p
-	flag.BoolVar(pipelineFlag, "pipeline", false, "Open Azure DevOps pipeline runs")
 
 	flag.Usage = usage
 	flag.Parse()
 
-	if !*pipelineFlag && !*prFlag {
+	if !*ciFlag && !*prFlag {
 		usage()
 		os.Exit(1)
 	}
@@ -160,8 +157,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *pipelineFlag {
-		err = runPipeline(info)
+	if *ciFlag {
+		err = runChecks(info)
 	} else {
 		err = runPR(info)
 	}

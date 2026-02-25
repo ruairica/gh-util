@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-type Pipeline struct {
+type Check struct {
 	Name   string
 	URL    string
 	Status string
@@ -39,7 +39,7 @@ type checkRun struct {
 	} `json:"app"`
 }
 
-func fetchPipelines(owner, repo, branch string) ([]Pipeline, error) {
+func fetchChecks(owner, repo, branch string) ([]Check, error) {
 	endpoint := fmt.Sprintf("/repos/%s/%s/commits/%s/check-runs?per_page=100", owner, repo, branch)
 	cmd := exec.Command("gh", "api", endpoint)
 	out, err := cmd.Output()
@@ -66,7 +66,7 @@ func fetchPipelines(owner, repo, branch string) ([]Pipeline, error) {
 		grouped[cr.Name] = append(grouped[cr.Name], cr)
 	}
 
-	pipelines := make([]Pipeline, 0, len(grouped))
+	checks := make([]Check, 0, len(grouped))
 	for name, runs := range grouped {
 		// Sort by started_at descending, pick latest
 		sort.Slice(runs, func(i, j int) bool {
@@ -77,18 +77,18 @@ func fetchPipelines(owner, repo, branch string) ([]Pipeline, error) {
 		if latest.Conclusion != "" {
 			status = latest.Conclusion
 		}
-		pipelines = append(pipelines, Pipeline{
+		checks = append(checks, Check{
 			Name:   name,
 			URL:    latest.DetailsURL,
 			Status: status,
 		})
 	}
 
-	sort.Slice(pipelines, func(i, j int) bool {
-		return strings.ToLower(pipelines[i].Name) < strings.ToLower(pipelines[j].Name)
+	sort.Slice(checks, func(i, j int) bool {
+		return strings.ToLower(checks[i].Name) < strings.ToLower(checks[j].Name)
 	})
 
-	return pipelines, nil
+	return checks, nil
 }
 
 func fetchPRs(branch string) ([]PR, error) {
