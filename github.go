@@ -44,11 +44,14 @@ func fetchChecks(owner, repo, branch string) ([]Check, error) {
 	cmd := exec.Command("gh", "api", endpoint)
 	out, err := cmd.Output()
 	if err != nil {
-		stderr := ""
 		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-			stderr = "\n" + strings.TrimSpace(string(exitErr.Stderr))
+			stderr := strings.TrimSpace(string(exitErr.Stderr))
+			if strings.Contains(stderr, "No commit found") || strings.Contains(stderr, "422") {
+				return nil, nil // branch not found upstream — treat as no checks
+			}
+			return nil, fmt.Errorf("failed to call GitHub API: %s", stderr)
 		}
-		return nil, fmt.Errorf("failed to call GitHub API%s\nEndpoint: %s\nIs 'gh' installed and authenticated? Run: gh auth login", stderr, endpoint)
+		return nil, fmt.Errorf("failed to call GitHub API — is 'gh' installed? Run: gh auth login")
 	}
 
 	var resp checkRunsResponse
@@ -98,7 +101,7 @@ func fetchPRs(branch string) ([]PR, error) {
 		"--json", "number,title,url,state,isDraft,headRefName,baseRefName",
 	).Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list PRs — is 'gh' installed and authenticated?\nRun: gh auth login")
+		return nil, ghExecError(err, "list PRs")
 	}
 
 	var prs []PR
@@ -116,7 +119,7 @@ func fetchPRsInto(branch string) ([]PR, error) {
 		"--json", "number,title,url,state,isDraft,headRefName,baseRefName",
 	).Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list PRs — is 'gh' installed and authenticated?\nRun: gh auth login")
+		return nil, ghExecError(err, "list PRs")
 	}
 
 	var prs []PR
@@ -125,4 +128,11 @@ func fetchPRsInto(branch string) ([]PR, error) {
 	}
 
 	return prs, nil
+}
+
+func ghExecError(err error, action string) error {
+	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+		return fmt.Errorf("failed to %s: %s", action, strings.TrimSpace(string(exitErr.Stderr)))
+	}
+	return fmt.Errorf("failed to %s — is 'gh' installed? Run: gh auth login", action)
 }
