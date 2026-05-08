@@ -24,7 +24,7 @@ func statusBadge(status string) string {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: gh-util [flags]\n\nFlags:\n  -ci   Open CI check runs for the current branch\n  -pr   Open pull requests for the current branch\n")
+	fmt.Fprintf(os.Stderr, "Usage: gh-util [flags] [branch]\n\nFlags:\n  -ci   Open CI check runs (current branch, or [branch] if given)\n  -pr   Open pull requests (current branch, or [branch] if given)\n")
 }
 
 func runChecks(info RepoInfo) error {
@@ -151,10 +151,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	args := flag.Args()
+	if len(args) > 1 {
+		fmt.Fprintln(os.Stderr, "Error: too many arguments; usage: gh-util -ci|-pr [branch]")
+		os.Exit(1)
+	}
+
 	info, err := getRepoInfo()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if len(args) == 1 {
+		info.Branch = args[0]
 	}
 
 	if *ciFlag {

@@ -2,10 +2,10 @@ A small Go CLI that quickly opens CI check runs or pull requests for your curren
 
 Clone and run `go install -ldflags="-s -w" .` to add it to GOPATH. (requires gh cli)
 
-Usage: gh-util [flags]
+Usage: gh-util [flags] [branch]
 
 Flags:
 
-  -ci   Open CI check runs for the current branch
+  -ci [branch]   Open CI check runs (current branch by default; pass a branch name to inspect another without checking it out)
 
-  -pr   Open pull requests for the current branch
+  -pr [branch]   Open pull requests (current branch by default; pass a branch name e.g. `main` to see the review queue targeting it)
