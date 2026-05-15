@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -24,19 +25,27 @@ func statusBadge(status string) string {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: gh-util [flags] [branch]\n\nFlags:\n  -ci   Open CI check runs (current branch, or [branch] if given)\n  -pr   Open pull requests (current branch, or [branch] if given)\n")
+	fmt.Fprintf(os.Stderr, "Usage: gh-util [flags] [branch]\n\nFlags:\n  -ci     Open CI check runs (current branch, or [branch] if given)\n  -pr     Open pull requests (current branch, or [branch] if given)\n  -wait   Poll until check runs are available (use with -ci)\n")
 }
 
-func runChecks(info RepoInfo) error {
-	checks, err := fetchChecks(info.Owner, info.Repo, info.Branch)
-	if err != nil {
-		return err
-	}
-
-	if len(checks) == 0 {
-		fmt.Printf("No check runs found on branch '%s'.\n", info.Branch)
-		fmt.Println("This branch may not have triggered any checks yet. Try pushing first.")
-		return nil
+func runChecks(info RepoInfo, wait bool) error {
+	var checks []Check
+	for {
+		var err error
+		checks, err = fetchChecks(info.Owner, info.Repo, info.Branch)
+		if err != nil {
+			return err
+		}
+		if len(checks) > 0 {
+			break
+		}
+		if !wait {
+			fmt.Printf("No check runs found on branch '%s'.\n", info.Branch)
+			fmt.Println("This branch may not have triggered any checks yet. Try pushing first.")
+			return nil
+		}
+		fmt.Printf("\rWaiting for checks on '%s'...", info.Branch)
+		time.Sleep(time.Second)
 	}
 
 	if len(checks) == 1 {
@@ -51,12 +60,11 @@ func runChecks(info RepoInfo) error {
 	}
 
 	var selected int
-	err = huh.NewSelect[int]().
+	if err := huh.NewSelect[int]().
 		Title(fmt.Sprintf("Checks — %s/%s (%s)", info.Owner, info.Repo, info.Branch)).
 		Options(options...).
 		Value(&selected).
-		Run()
-	if err != nil {
+		Run(); err != nil {
 		return err
 	}
 
@@ -142,6 +150,7 @@ func runPR(info RepoInfo) error {
 func main() {
 	ciFlag := flag.Bool("ci", false, "Open CI check runs for the current branch")
 	prFlag := flag.Bool("pr", false, "Open pull requests for the current branch")
+	waitFlag := flag.Bool("wait", false, "Poll until check runs are available (use with -ci)")
 
 	flag.Usage = usage
 	flag.Parse()
@@ -168,7 +177,7 @@ func main() {
 	}
 
 	if *ciFlag {
-		err = runChecks(info)
+		err = runChecks(info, *waitFlag)
 	} else {
 		err = runPR(info)
 	}

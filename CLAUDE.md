@@ -10,6 +10,7 @@ go build -ldflags="-s -w" -o gh-util.exe .
 
 # Run
 go run . -ci                # open CI check runs for current branch
+go run . -ci -wait          # poll until CI check runs appear, then open
 go run . -pr                # open PRs for current branch
 
 # Install to GOPATH/bin (for testing from any repo)
