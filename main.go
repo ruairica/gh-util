@@ -25,7 +25,7 @@ func statusBadge(status string) string {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: gh-util [flags] [branch]\n\nFlags:\n  -ci     Open CI check runs (current branch, or [branch] if given)\n  -pr     Open pull requests (current branch, or [branch] if given)\n  -wait   Poll until check runs are available (use with -ci)\n")
+	fmt.Fprintf(os.Stderr, "Usage: gh-util [flags] [branch]\n\nFlags:\n  -ci     Open CI check runs (current branch, or [branch] if given)\n  -pr     Open pull requests (current branch, or [branch] if given)\n  -wait   Poll until check runs or pull requests are available (use with -ci or -pr)\n")
 }
 
 func runChecks(info RepoInfo, wait bool) error {
@@ -78,40 +78,48 @@ func prDirection(pr PR, branch string) string {
 	return fmt.Sprintf("%s → %s", pr.HeadRef, pr.BaseRef)
 }
 
-func runPR(info RepoInfo) error {
-	var prsFrom, prsInto []PR
-
-	g := new(errgroup.Group)
-	g.Go(func() error {
-		var err error
-		prsFrom, err = fetchPRs(info.Branch)
-		return err
-	})
-	g.Go(func() error {
-		var err error
-		prsInto, err = fetchPRsInto(info.Branch)
-		return err
-	})
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	// Deduplicate: a PR from this branch could also target this branch (unlikely but possible)
-	seen := make(map[int]bool)
+func runPR(info RepoInfo, wait bool) error {
 	var prs []PR
-	for _, pr := range prsFrom {
-		seen[pr.Number] = true
-		prs = append(prs, pr)
-	}
-	for _, pr := range prsInto {
-		if !seen[pr.Number] {
+	for {
+		var prsFrom, prsInto []PR
+
+		g := new(errgroup.Group)
+		g.Go(func() error {
+			var err error
+			prsFrom, err = fetchPRs(info.Branch)
+			return err
+		})
+		g.Go(func() error {
+			var err error
+			prsInto, err = fetchPRsInto(info.Branch)
+			return err
+		})
+		if err := g.Wait(); err != nil {
+			return err
+		}
+
+		// Deduplicate: a PR from this branch could also target this branch (unlikely but possible)
+		seen := make(map[int]bool)
+		prs = nil
+		for _, pr := range prsFrom {
+			seen[pr.Number] = true
 			prs = append(prs, pr)
 		}
-	}
+		for _, pr := range prsInto {
+			if !seen[pr.Number] {
+				prs = append(prs, pr)
+			}
+		}
 
-	if len(prs) == 0 {
-		fmt.Printf("No open pull requests found for branch '%s'.\n", info.Branch)
-		return nil
+		if len(prs) > 0 {
+			break
+		}
+		if !wait {
+			fmt.Printf("No open pull requests found for branch '%s'.\n", info.Branch)
+			return nil
+		}
+		fmt.Printf("\rWaiting for pull requests on '%s'...", info.Branch)
+		time.Sleep(time.Second)
 	}
 
 	if len(prs) == 1 {
@@ -150,7 +158,7 @@ func runPR(info RepoInfo) error {
 func main() {
 	ciFlag := flag.Bool("ci", false, "Open CI check runs for the current branch")
 	prFlag := flag.Bool("pr", false, "Open pull requests for the current branch")
-	waitFlag := flag.Bool("wait", false, "Poll until check runs are available (use with -ci)")
+	waitFlag := flag.Bool("wait", false, "Poll until check runs or pull requests are available (use with -ci or -pr)")
 
 	flag.Usage = usage
 	flag.Parse()
@@ -179,7 +187,7 @@ func main() {
 	if *ciFlag {
 		err = runChecks(info, *waitFlag)
 	} else {
-		err = runPR(info)
+		err = runPR(info, *waitFlag)
 	}
 
 	if err != nil {
