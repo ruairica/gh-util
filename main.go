@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/sync/errgroup"
 )
@@ -48,34 +47,13 @@ func runChecks(info RepoInfo, wait bool) error {
 		time.Sleep(time.Second)
 	}
 
-	if len(checks) == 1 {
-		fmt.Printf("Opening: %s [%s]\n", checks[0].Name, checks[0].Status)
-		return openURL(checks[0].URL)
-	}
-
-	options := make([]huh.Option[int], len(checks))
+	items := make([]pickerItem, len(checks))
 	for i, c := range checks {
 		label := fmt.Sprintf("%-55s %s", c.Name, statusBadge(c.Status))
-		options[i] = huh.NewOption(label, i)
+		items[i] = pickerItem{label: label, url: c.URL}
 	}
 
-	var selected int
-	if err := huh.NewSelect[int]().
-		Title(fmt.Sprintf("Checks — %s/%s (%s)", info.Owner, info.Repo, info.Branch)).
-		Options(options...).
-		Value(&selected).
-		Run(); err != nil {
-		return err
-	}
-
-	return openURL(checks[selected].URL)
-}
-
-func prDirection(pr PR, branch string) string {
-	if pr.HeadRef == branch {
-		return fmt.Sprintf("%s → %s", pr.HeadRef, pr.BaseRef)
-	}
-	return fmt.Sprintf("%s → %s", pr.HeadRef, pr.BaseRef)
+	return runPicker(fmt.Sprintf("Checks — %s/%s (%s)", info.Owner, info.Repo, info.Branch), items)
 }
 
 func runPR(info RepoInfo, wait bool) error {
@@ -122,37 +100,17 @@ func runPR(info RepoInfo, wait bool) error {
 		time.Sleep(time.Second)
 	}
 
-	if len(prs) == 1 {
-		pr := prs[0]
-		draft := ""
-		if pr.Draft {
-			draft = " (draft)"
-		}
-		fmt.Printf("Opening: #%d %s [%s]%s\n", pr.Number, pr.Title, prDirection(pr, info.Branch), draft)
-		return openURL(pr.URL)
-	}
-
-	options := make([]huh.Option[int], len(prs))
+	items := make([]pickerItem, len(prs))
 	for i, pr := range prs {
 		draft := ""
 		if pr.Draft {
 			draft = " [draft]"
 		}
-		dir := prDirection(pr, info.Branch)
-		label := fmt.Sprintf("#%-6d %s (%s)%s", pr.Number, pr.Title, dir, draft)
-		options[i] = huh.NewOption(label, i)
+		label := fmt.Sprintf("#%-6d %s (%s → %s)%s", pr.Number, pr.Title, pr.HeadRef, pr.BaseRef, draft)
+		items[i] = pickerItem{label: label, url: pr.URL}
 	}
 
-	var selected int
-	if err := huh.NewSelect[int]().
-		Title(fmt.Sprintf("Pull Requests — %s", info.Branch)).
-		Options(options...).
-		Value(&selected).
-		Run(); err != nil {
-		return err
-	}
-
-	return openURL(prs[selected].URL)
+	return runPicker(fmt.Sprintf("Pull Requests — %s", info.Branch), items)
 }
 
 func main() {

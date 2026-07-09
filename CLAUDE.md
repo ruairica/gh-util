@@ -25,6 +25,6 @@ go fix -diff ./...          # preview changes
 
 - Go 1.26+ — use modern language features
 - External tools via `os/exec`: `git`, `gh` (GitHub CLI) — requires both installed and `gh` authenticated
-- TUI via `charmbracelet/huh` (inline select prompts)
+- TUI via `charmbracelet/bubbletea` (custom list picker in `picker.go`)
 - Status styling via `charmbracelet/lipgloss` (colors and symbols)
 - Strip binaries with `-ldflags="-s -w"` for size reduction
