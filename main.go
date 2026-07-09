@@ -4,11 +4,33 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/sync/errgroup"
 )
+
+// checkNameWidth is the column width check names are padded to so status
+// badges align; child rows subtract their "├ " prefix from it.
+const checkNameWidth = 55
+
+// splitSubStage splits a check name of the form "X (Stage Job)" into the
+// parent name "X" and the stage text, when a check named exactly "X" exists
+// in names. The longest matching parent wins, so "X (a) (b)" nests under
+// "X (a)" when that check also exists.
+func splitSubStage(name string, names map[string]bool) (parent, stage string, ok bool) {
+	base, hadParen := strings.CutSuffix(name, ")")
+	if !hadParen {
+		return "", "", false
+	}
+	for idx := strings.LastIndex(base, " ("); idx > 0; idx = strings.LastIndex(base[:idx], " (") {
+		if names[base[:idx]] && idx+2 < len(base) {
+			return base[:idx], base[idx+2:], true
+		}
+	}
+	return "", "", false
+}
 
 func statusBadge(status string) string {
 	switch status {
@@ -47,10 +69,36 @@ func runChecks(info RepoInfo, wait bool) error {
 		time.Sleep(time.Second)
 	}
 
-	items := make([]pickerItem, len(checks))
-	for i, c := range checks {
-		label := fmt.Sprintf("%-55s %s", c.Name, statusBadge(c.Status))
-		items[i] = pickerItem{label: label, url: c.URL}
+	// Split checks into top-level runs and their sub-stages. A check named
+	// "X (Stage Job)" is a sub-stage of a check named exactly "X" (Azure
+	// Pipelines / GitHub Actions convention); anything else stays top-level.
+	names := make(map[string]bool, len(checks))
+	for _, c := range checks {
+		names[c.Name] = true
+	}
+
+	var parents []Check
+	children := make(map[string][]Check) // parent name → sub-stages, Name rewritten to the stage text
+	for _, c := range checks {
+		if parent, stage, ok := splitSubStage(c.Name, names); ok {
+			c.Name = stage
+			children[parent] = append(children[parent], c)
+			continue
+		}
+		parents = append(parents, c)
+	}
+
+	var items []pickerItem
+	for _, p := range parents {
+		label := fmt.Sprintf("%-*s %s", checkNameWidth, p.Name, statusBadge(p.Status))
+		if n := len(children[p.Name]); n > 0 {
+			label += pickerDimStyle.Render(fmt.Sprintf(" +%d", n))
+		}
+		items = append(items, pickerItem{label: label, url: p.URL})
+		for _, c := range children[p.Name] {
+			label := pickerDimStyle.Render(fmt.Sprintf("├ %-*s", checkNameWidth-2, c.Name)) + " " + statusBadge(c.Status)
+			items = append(items, pickerItem{label: label, url: c.URL, child: true})
+		}
 	}
 
 	return runPicker(fmt.Sprintf("Checks — %s/%s (%s)", info.Owner, info.Repo, info.Branch), items)
