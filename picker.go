@@ -10,17 +10,23 @@ import (
 )
 
 type pickerItem struct {
-	label string
-	url   string
-	child bool // sub-stage row, hidden until the picker is expanded
+	name   string // display text, plain, already padded (includes "├ " prefix for children)
+	status string // raw check status, styled at render time; "" for PR rows
+	extra  string // plain dim suffix like "+3"; "" if none
+	url    string
+	child  bool // sub-stage row, hidden until the picker is expanded
 }
 
 var (
-	pickerDimStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	pickerDimColor    = lipgloss.Color("8")
+	pickerCursorColor = lipgloss.Color("6")
+	// pickerSelBg highlights the selected row; adaptive so the bar stays
+	// subtle on both light and dark terminal themes.
+	pickerSelBg = lipgloss.AdaptiveColor{Light: "254", Dark: "237"}
+
+	pickerDimStyle = lipgloss.NewStyle().Foreground(pickerDimColor)
 	pickerErrStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 
-	pickerCursor   = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Render("> ")
-	pickerOpened   = pickerDimStyle.Render(" (opened)")
 	pickerFooter   = pickerDimStyle.Render("o: open • enter: open & exit • esc: quit")
 	pickerExpand   = pickerDimStyle.Render(" • a: expand")
 	pickerCollapse = pickerDimStyle.Render(" • a: collapse")
@@ -107,14 +113,28 @@ func (m pickerModel) View() string {
 		if m.hidden(i) {
 			continue
 		}
+		// All segments compose onto base so the selection bar runs unbroken
+		// under the cursor, name, badge, and suffixes.
+		base := lipgloss.NewStyle()
 		if i == m.cursor {
-			b.WriteString(pickerCursor)
+			base = base.Background(pickerSelBg)
+			b.WriteString(base.Foreground(pickerCursorColor).Render("> "))
 		} else {
 			b.WriteString("  ")
 		}
-		b.WriteString(item.label)
+		name := base
+		if item.child {
+			name = name.Foreground(pickerDimColor)
+		}
+		b.WriteString(name.Render(item.name))
+		if item.status != "" {
+			b.WriteString(base.Render(" ") + statusBadge(item.status, base))
+		}
+		if item.extra != "" {
+			b.WriteString(base.Foreground(pickerDimColor).Render(" " + item.extra))
+		}
 		if m.opened[i] {
-			b.WriteString(pickerOpened)
+			b.WriteString(base.Foreground(pickerDimColor).Render(" (opened)"))
 		}
 		b.WriteString("\n")
 	}
@@ -139,7 +159,7 @@ func runPicker(title string, items []pickerItem) error {
 		return nil
 	}
 	if len(items) == 1 {
-		fmt.Println("Opening:", items[0].label)
+		fmt.Println("Opening:", strings.TrimRight(items[0].name, " "))
 		return openURL(items[0].url)
 	}
 

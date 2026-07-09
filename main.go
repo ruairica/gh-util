@@ -32,16 +32,18 @@ func splitSubStage(name string, names map[string]bool) (parent, stage string, ok
 	return "", "", false
 }
 
-func statusBadge(status string) string {
+// statusBadge renders the status colored on top of base, so the picker can
+// carry a selection background through the badge.
+func statusBadge(status string, base lipgloss.Style) string {
 	switch status {
 	case "success":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("✓ " + status)
+		return base.Foreground(lipgloss.Color("2")).Render("✓ " + status)
 	case "failure":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Render("✗ " + status)
+		return base.Foreground(lipgloss.Color("1")).Render("✗ " + status)
 	case "in_progress":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("⟳ " + status)
+		return base.Foreground(lipgloss.Color("3")).Render("⟳ " + status)
 	default:
-		return status
+		return base.Render(status)
 	}
 }
 
@@ -90,14 +92,18 @@ func runChecks(info RepoInfo, wait bool) error {
 
 	var items []pickerItem
 	for _, p := range parents {
-		label := fmt.Sprintf("%-*s %s", checkNameWidth, p.Name, statusBadge(p.Status))
+		item := pickerItem{name: fmt.Sprintf("%-*s", checkNameWidth, p.Name), status: p.Status, url: p.URL}
 		if n := len(children[p.Name]); n > 0 {
-			label += pickerDimStyle.Render(fmt.Sprintf(" +%d", n))
+			item.extra = fmt.Sprintf("+%d", n)
 		}
-		items = append(items, pickerItem{label: label, url: p.URL})
+		items = append(items, item)
 		for _, c := range children[p.Name] {
-			label := pickerDimStyle.Render(fmt.Sprintf("├ %-*s", checkNameWidth-2, c.Name)) + " " + statusBadge(c.Status)
-			items = append(items, pickerItem{label: label, url: c.URL, child: true})
+			items = append(items, pickerItem{
+				name:   fmt.Sprintf("├ %-*s", checkNameWidth-2, c.Name),
+				status: c.Status,
+				url:    c.URL,
+				child:  true,
+			})
 		}
 	}
 
@@ -155,7 +161,7 @@ func runPR(info RepoInfo, wait bool) error {
 			draft = " [draft]"
 		}
 		label := fmt.Sprintf("#%-6d %s (%s → %s)%s", pr.Number, pr.Title, pr.HeadRef, pr.BaseRef, draft)
-		items[i] = pickerItem{label: label, url: pr.URL}
+		items[i] = pickerItem{name: label, url: pr.URL}
 	}
 
 	return runPicker(fmt.Sprintf("Pull Requests — %s", info.Branch), items)

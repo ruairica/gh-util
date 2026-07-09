@@ -11,9 +11,3 @@ Flags:
   -wait          Poll until CI check runs or pull requests appear for the branch, then open them (use with -ci or -pr when they haven't started yet; combines with a branch name, e.g. `gh-util -ci -wait some-branch` or `gh-util -pr -wait some-branch`)
 
   -pr [branch]   Open pull requests (current branch by default; pass a branch name e.g. `main` to see the review queue targeting it)
-
-
-TODO
-I want to be able to select multiple to open, maybe ctrl+enter to open without closing the TUI
-
-there's a lot of noise sometimes, how can i reduce this......
